@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Peta Batas Administrasi Desa Somagede</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <link rel="stylesheet" type="text/css" href="Untitled-1.css">
+    <script src="atribut.js"></script>
+    
+
+</head>
+<body>
+    <div class="title-container">
+        <h1>Peta Batas Administrasi Desa Somagede</h1>
+    </div>
+    <div id="map"></div>
+    
+    <div id="control-buttons" class="control-buttons">
+        <button class="control-btn" onclick="toggleMenu()" title="Menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        <button class="control-btn" onclick="resetView()" title="Reset View">
+            <i class="fas fa-home"></i>
+        </button>
+        <button class="control-btn" onclick="toggleFullscreen()" title="Fullscreen">
+            <i class="fas fa-expand"></i>
+        </button>
+    </div>
+    
+    <div id="menu-container" class="menu-container">
+        <span class="close-menu" onclick="toggleMenu()">&times;</span>
+        <h3>Menu Peta</h3>
+        
+        <div class="menu-search">
+            <input type="text" id="menu-search-input" placeholder="Cari lokasi..." />
+            <button onclick="searchLocation()"><i class="fas fa-search"></i></button>
+        </div>
+        
+        <div class="menu-option" onclick="showAbout()">
+            <i class="fas fa-info-circle"></i> Tentang Peta
+        </div>
+        
+        <div class="menu-option" onclick="showVillageInfo()">
+            <i class="fas fa-map-marked-alt"></i> Info Desa
+        </div>
+        
+        <div class="menu-option" onclick="showHelp()">
+            <i class="fas fa-question-circle"></i> Bantuan
+        </div>
+        
+        <!-- Base Map Controls -->
+        <div class="layer-section">
+            <h4><i class="fas fa-globe"></i> Peta Dasar</h4>
+            <div class="layer-control">
+                <label>OpenStreetMap</label>
+                <label class="switch">
+                    <input type="radio" name="basemap" value="osm" checked onchange="changeBaseMap('osm')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Satelit</label>
+                <label class="switch">
+                    <input type="radio" name="basemap" value="satellite" onchange="changeBaseMap('satellite')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Terrain</label>
+                <label class="switch">
+                    <input type="radio" name="basemap" value="terrain" onchange="changeBaseMap('terrain')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Administrative Layers -->
+        <div class="layer-section">
+            <h4><i class="fas fa-layer-group"></i> Batas Administrasi</h4>
+            <div class="layer-control">
+                <label>Batas Desa</label>
+                <label class="switch">
+                    <input type="checkbox" id="desa-toggle" checked onchange="toggleLayer('desa')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Batas Dusun</label>
+                <label class="switch">
+                    <input type="checkbox" id="dusun-toggle" checked onchange="toggleLayer('dusun')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Batas RW</label>
+                <label class="switch">
+                    <input type="checkbox" id="rw-toggle" onchange="toggleLayer('rw')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Batas RT</label>
+                <label class="switch">
+                    <input type="checkbox" id="rt-toggle" onchange="toggleLayer('rt')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="overlay" id="overlay" onclick="closePopup()"></div>
+    <div class="info-popup" id="info-popup">
+        <h3 id="popup-title">Judul</h3>
+        <p id="popup-content">Konten</p>
+        <button onclick="closePopup()">Tutup</button>
+    </div>
+
+    <script>
+
+        // Initialize map
+        var map = L.map('map', {
+            center: [-7.53, 109.33],
+            zoom: 15,
+            zoomControl: false
+        });
+
+        // Add zoom control to custom position
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(map);
+
+        // Base layer definitions
+        var baseLayers = {
+            osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }),
+            terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+            })
+        };
+
+        // Add default base layer
+        baseLayers.osm.addTo(map);
+        var currentBaseLayer = 'osm';
+
+        // Administrative layers
+        var adminLayers = {};
+
+        // Create Desa layer
+        adminLayers.desa = L.geoJSON(DESA, {
+            style: function(feature) {
+                return {
+                    color: "white",
+                    weight: 3,
+                    opacity: 0.8,
+                    fillOpacity: 0.1
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Desa</div>' +
+                    '<strong>Desa:</strong> ' + feature.properties.DESA + '<br>' +
+                    '<strong>Kecamatan:</strong> ' + (feature.properties.KECAMATAN || 'Somagede') + '<br>' +
+                    '<strong>Kabupaten:</strong> ' + (feature.properties.KABUPATEN || 'Banyumas') + '<br>' +
+                    '<strong>Provinsi:</strong> ' + (feature.properties.PROVINSI || 'Jawa Tengah')
+                );
+            }
+        }).addTo(map);
+
+      // Create Dusun layer
+adminLayers.dusun = L.geoJSON(DUSUN, {
+    style: function(feature) {
+        var dashPatterns = {
+            '1': '5, 5',      // Garis putus pendek
+            '2': '10, 5',     // Garis putus sedang
+            '3': '15, 10'     // Garis putus panjang
+        };
+        return {
+            color: '#2c3e50',  // Satu warna untuk semua (biru tua)
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.2,
+            dashArray: dashPatterns[feature.properties.Dusun] || '5, 5'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Dusun</div>' +
+            '<strong>Dusun:</strong> ' + feature.properties.Dusun + '<br>' +
+            '<strong>Desa:</strong> ' + feature.properties.DESA
+        );
+    }
+}).addTo(map);
+
+        // Create RW layer
+        adminLayers.rw = L.geoJSON(RW, {
+            style: function(feature) {
+                return {
+                    color: "purple",
+                    weight: 2,
+                    opacity: 0.7,
+                    fillOpacity: 0.15,
+                    dashArray: '5, 5'
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi RW</div>' +
+                    '<strong>RW:</strong> ' + feature.properties.RW + '<br>' +
+                    '<strong>Dusun:</strong> ' + (feature.properties.Dusun || '-') + '<br>' +
+                    '<strong>Desa:</strong> ' + feature.properties.DESA
+                );
+            }
+        });
+
+        // Create RT layer
+        adminLayers.rt = L.geoJSON(RT, {
+            style: function(feature) {
+                return {
+                    color: "red",
+                    weight: 1.5,
+                    opacity: 0.6,
+                    fillOpacity: 0.1,
+                    dashArray: '3, 3'
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi RT</div>' +
+                    '<strong>RT:</strong> ' + feature.properties.RT + '<br>' +
+                    '<strong>RW:</strong> ' + (feature.properties.RW || '-') + '<br>' +
+                    '<strong>Desa:</strong> ' + feature.properties.DESA
+                );
+            }
+        });
+
+        // Functions
+        function toggleMenu() {
+            var menu = document.getElementById('menu-container');
+            menu.classList.toggle('active');
+        }
+
+        function changeBaseMap(type) {
+            // Remove current base layer
+            if (baseLayers[currentBaseLayer]) {
+                map.removeLayer(baseLayers[currentBaseLayer]);
+            }
+            
+            // Add new base layer
+            baseLayers[type].addTo(map);
+            currentBaseLayer = type;
+        }
+
+        function toggleLayer(layerName) {
+            var layer = adminLayers[layerName];
+            if (layer) {
+                if (map.hasLayer(layer)) {
+                    map.removeLayer(layer);
+                } else {
+                    map.addLayer(layer);
+                }
+            }
+        }
+
+        function resetView() {
+            map.setView([-7.53, 109.33], 15);
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function searchLocation() {
+            var searchTerm = document.getElementById('menu-search-input').value.toLowerCase();
+            
+            if (!searchTerm) {
+                alert('Masukkan kata kunci pencarian');
+                return;
+            }
+
+            var found = false;
+            
+            // Search in all layers
+            Object.keys(adminLayers).forEach(function(layerKey) {
+                var layer = adminLayers[layerKey];
+                if (layer && map.hasLayer(layer)) {
+                    layer.eachLayer(function(feature) {
+                        var props = feature.feature.properties;
+                        var searchableText = Object.values(props).join(' ').toLowerCase();
+                        
+                        if (searchableText.includes(searchTerm)) {
+                            map.fitBounds(feature.getBounds());
+                            feature.openPopup();
+                            found = true;
+                            return false; // Break loop
+                        }
+                    });
+                }
+            });
+
+            if (!found) {
+                alert('Lokasi tidak ditemukan: ' + searchTerm);
+            }
+        }
+
+        function showAbout() {
+            showPopup('Tentang Peta', 
+                'Peta Batas Administrasi Desa Somagede adalah aplikasi web interaktif yang menampilkan informasi batas administratif mulai dari tingkat desa, dusun, RW, hingga RT. ' +
+                'Peta ini dapat digunakan untuk mempelajari pembagian wilayah administratif dan membantu dalam perencanaan pembangunan desa.'
+            );
+        }
+
+        function showVillageInfo() {
+            showPopup('Informasi Desa Somagede', 
+                'Desa Somagede terletak di Kecamatan Somagede, Kabupaten Banyumas, Provinsi Jawa Tengah. ' +
+                'Desa ini terdiri dari beberapa dusun dengan pembagian RW dan RT yang dapat dilihat melalui layer-layer yang tersedia di menu.'
+            );
+        }
+
+        function showHelp() {
+            showPopup('Bantuan Penggunaan', 
+                'Cara menggunakan peta:<br>' +
+                '• Gunakan menu di kiri untuk mengontrol layer yang ditampilkan<br>' +
+                '• Pilih peta dasar sesuai kebutuhan (OSM, Satelit, atau Terrain)<br>' +
+                '• Aktifkan/nonaktifkan layer batas administrasi<br>' +
+                '• Gunakan fitur pencarian untuk mencari lokasi tertentu<br>' +
+                '• Klik pada area peta untuk melihat informasi detail'
+            );
+        }
+
+        function showPopup(title, content) {
+            document.getElementById('popup-title').innerHTML = title;
+            document.getElementById('popup-content').innerHTML = content;
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('info-popup').style.display = 'block';
+        }
+
+        function closePopup() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('info-popup').style.display = 'none';
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            var menu = document.getElementById('menu-container');
+            var controlButtons = document.getElementById('control-buttons');
+            
+            if (!menu.contains(event.target) && !controlButtons.contains(event.target)) {
+                menu.classList.remove('active');
+            }
+        });
+
+        // Initialize search on Enter key
+        document.getElementById('menu-search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchLocation();
+            }
+        });
+
+        // Fit map to village bounds on load
+        setTimeout(function() {
+            if (adminLayers.desa) {
+                map.fitBounds(adminLayers.desa.getBounds(), {padding: [20, 20]});
+            }
+        }, 500);
+
+        console.log('Peta Desa Somagede berhasil dimuat!');
+    </script>
+</body>
+</html>
