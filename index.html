@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <link rel="stylesheet" type="text/css" href="Untitled-1.css">
     <script src="atribut.js"></script>
+    <!-- Tambahan untuk data jalan dan sungai -->
+    <script src="jalan.js"></script>
+    <script src="sungai.js"></script>
     
 
 </head>
@@ -114,6 +117,25 @@
                 </label>
             </div>
         </div>
+        
+        <!-- Infrastructure Layers -->
+        <div class="layer-section">
+            <h4><i class="fas fa-road"></i> Infrastruktur</h4>
+            <div class="layer-control">
+                <label>Jalan</label>
+                <label class="switch">
+                    <input type="checkbox" id="jalan-toggle" onchange="toggleLayer('jalan')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Sungai</label>
+                <label class="switch">
+                    <input type="checkbox" id="sungai-toggle" onchange="toggleLayer('sungai')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
     </div>
     
     <div class="overlay" id="overlay" onclick="closePopup()"></div>
@@ -178,30 +200,30 @@
             }
         }).addTo(map);
 
-      // Create Dusun layer
-adminLayers.dusun = L.geoJSON(DUSUN, {
-    style: function(feature) {
-        var dashPatterns = {
-            '1': '5, 5',      // Garis putus pendek
-            '2': '10, 5',     // Garis putus sedang
-            '3': '15, 10'     // Garis putus panjang
-        };
-        return {
-            color: '#2c3e50',  // Satu warna untuk semua (biru tua)
-            weight: 2,
-            opacity: 0.8,
-            fillOpacity: 0.2,
-            dashArray: dashPatterns[feature.properties.Dusun] || '5, 5'
-        };
-    },
-    onEachFeature: function (feature, layer) {
-        layer.bindPopup(
-            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Dusun</div>' +
-            '<strong>Dusun:</strong> ' + feature.properties.Dusun + '<br>' +
-            '<strong>Desa:</strong> ' + feature.properties.DESA
-        );
-    }
-}).addTo(map);
+        // Create Dusun layer
+        adminLayers.dusun = L.geoJSON(DUSUN, {
+            style: function(feature) {
+                var dashPatterns = {
+                    '1': '5, 5',      // Garis putus pendek
+                    '2': '10, 5',     // Garis putus sedang
+                    '3': '15, 10'     // Garis putus panjang
+                };
+                return {
+                    color: '#2c3e50',  // Satu warna untuk semua (biru tua)
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0.2,
+                    dashArray: dashPatterns[feature.properties.Dusun] || '5, 5'
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Dusun</div>' +
+                    '<strong>Dusun:</strong> ' + feature.properties.Dusun + '<br>' +
+                    '<strong>Desa:</strong> ' + feature.properties.DESA
+                );
+            }
+        }).addTo(map);
 
         // Create RW layer
         adminLayers.rw = L.geoJSON(RW, {
@@ -241,6 +263,59 @@ adminLayers.dusun = L.geoJSON(DUSUN, {
                     '<strong>RT:</strong> ' + feature.properties.RT + '<br>' +
                     '<strong>RW:</strong> ' + (feature.properties.RW || '-') + '<br>' +
                     '<strong>Desa:</strong> ' + feature.properties.DESA
+                );
+            }
+        });
+
+        // Create Jalan layer (Infrastructure Layer)
+        adminLayers.jalan = L.geoJSON(typeof JALAN !== 'undefined' ? JALAN : null, {
+            style: function(feature) {
+                return {
+                    color: "#F7931E",
+                    weight: 2.5,
+                    opacity:1,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                var nama = feature.properties.NAMA_JALAN || feature.properties.NAME || 'Jalan';
+                var tipe = feature.properties.TIPE_JALAN || feature.properties.TYPE || 'Tidak diketahui';
+                var panjang = feature.properties.PANJANG || 'Tidak diketahui';
+                
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;"><i class="fas fa-road"></i> Informasi Jalan</div>' +
+                    '<strong>Nama:</strong> ' + nama + '<br>' +
+                    '<strong>Tipe:</strong> ' + tipe + '<br>' +
+                    '<strong>Panjang:</strong> ' + panjang + ' m<br>' +
+                    '<strong>Kondisi:</strong> ' + (feature.properties.KONDISI || 'Baik')
+                );
+            }
+        });
+
+        // Create Sungai layer (Infrastructure Layer)
+        adminLayers.sungai = L.geoJSON(typeof SUNGAI !== 'undefined' ? SUNGAI : null, {
+            style: function(feature) {
+                return {
+                    color: "blue",
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.5,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                var nama = feature.properties.NAMA_SUNGAI || feature.properties.NAME || 'Sungai Serayu';
+                var tipe = feature.properties.TIPE_SUNGAI || feature.properties.TYPE || 'Tidak diketahui';
+                var panjang = feature.properties.PANJANG || '181 KM';
+                
+                layer.bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;"><i class="fas fa-water"></i> Informasi Sungai</div>' +
+                    '<strong>Nama:</strong> ' + nama + '<br>' +
+                    '<strong>Tipe:</strong> ' + tipe + '<br>' +
+                    '<strong>Panjang:</strong> ' + panjang + ' m<br>' +
+                    '<strong>Kedalaman:</strong> ' + (feature.properties.KEDALAMAN || 'Tidak diketahui') + ' m'
                 );
             }
         });
@@ -321,14 +396,16 @@ adminLayers.dusun = L.geoJSON(DUSUN, {
         function showAbout() {
             showPopup('Tentang Peta', 
                 'Peta Batas Administrasi Desa Somagede adalah aplikasi web interaktif yang menampilkan informasi batas administratif mulai dari tingkat desa, dusun, RW, hingga RT. ' +
-                'Peta ini dapat digunakan untuk mempelajari pembagian wilayah administratif dan membantu dalam perencanaan pembangunan desa.'
+                'Peta ini juga dilengkapi dengan informasi infrastruktur seperti jaringan jalan dan sungai yang ada di wilayah desa. ' +
+                'Peta ini dapat digunakan untuk perencanaan pembangunan, navigasi, dan analisis spasial wilayah.'
             );
         }
 
         function showVillageInfo() {
             showPopup('Informasi Desa Somagede', 
                 'Desa Somagede terletak di Kecamatan Somagede, Kabupaten Banyumas, Provinsi Jawa Tengah. ' +
-                'Desa ini terdiri dari beberapa dusun dengan pembagian RW dan RT yang dapat dilihat melalui layer-layer yang tersedia di menu.'
+                'Desa ini terdiri dari beberapa dusun dengan pembagian RW dan RT yang dapat dilihat melalui layer-layer yang tersedia di menu. ' +
+                'Infrastruktur desa meliputi jaringan jalan dan sistem hidrologi (sungai) yang mendukung aktivitas masyarakat.'
             );
         }
 
@@ -338,8 +415,10 @@ adminLayers.dusun = L.geoJSON(DUSUN, {
                 '• Gunakan menu di kiri untuk mengontrol layer yang ditampilkan<br>' +
                 '• Pilih peta dasar sesuai kebutuhan (OSM, Satelit, atau Terrain)<br>' +
                 '• Aktifkan/nonaktifkan layer batas administrasi<br>' +
-                '• Gunakan fitur pencarian untuk mencari lokasi tertentu<br>' +
-                '• Klik pada area peta untuk melihat informasi detail'
+                '• Aktifkan layer infrastruktur (jalan dan sungai) untuk informasi lebih detail<br>' +
+                '• Gunakan fitur pencarian untuk mencari lokasi, jalan, atau sungai tertentu<br>' +
+                '• Klik pada area peta untuk melihat informasi detail<br>' +
+                '• Gunakan tombol reset untuk kembali ke tampilan awal'
             );
         }
 
@@ -379,7 +458,7 @@ adminLayers.dusun = L.geoJSON(DUSUN, {
             }
         }, 500);
 
-        console.log('Peta Desa Somagede berhasil dimuat!');
+        console.log('Peta Desa Somagede dengan layer jalan dan sungai berhasil dimuat!');
     </script>
 </body>
 </html>
