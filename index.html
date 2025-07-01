@@ -14,10 +14,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <link rel="stylesheet" type="text/css" href="Untitled-1.css">
     <script src="atribut.js"></script>
-    <!-- Tambahan untuk data jalan dan sungai -->
-    <script src="jalan.js"></script>
-    <script src="sungai.js"></script>
-    
 
 </head>
 <body>
@@ -30,12 +26,18 @@
         <button class="control-btn" onclick="toggleMenu()" title="Menu">
             <i class="fas fa-bars"></i>
         </button>
+        <button class="control-btn geolocation-btn" id="geolocate-btn" onclick="toggleGeolocation()" title="Lokasi Saya">
+            <i class="fas fa-location-arrow"></i>
+        </button>
         <button class="control-btn" onclick="resetView()" title="Reset View">
             <i class="fas fa-home"></i>
         </button>
         <button class="control-btn" onclick="toggleFullscreen()" title="Fullscreen">
             <i class="fas fa-expand"></i>
         </button>
+        <button class="control-btn" onclick="clearSelection()" title="Clear Selection">
+    <i class="fas fa-times-circle"></i>
+</button>
     </div>
     
     <div id="menu-container" class="menu-container">
@@ -80,6 +82,13 @@
                 <label>Terrain</label>
                 <label class="switch">
                     <input type="radio" name="basemap" value="terrain" onchange="changeBaseMap('terrain')">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-control">
+                <label>Google Traffic</label>
+                <label class="switch">
+                    <input type="radio" name="basemap" value="traffic" onchange="changeBaseMap('traffic')">
                     <span class="slider"></span>
                 </label>
             </div>
@@ -136,6 +145,18 @@
                 </label>
             </div>
         </div>
+        
+        <!-- Geolocation Section -->
+        <div class="layer-section">
+            <h4><i class="fas fa-location-arrow"></i> Lokasi</h4>
+            <div class="layer-control">
+                <label>Tracking Lokasi</label>
+                <label class="switch">
+                    <input type="checkbox" id="tracking-toggle" onchange="toggleLocationTracking()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
     </div>
     
     <div class="overlay" id="overlay" onclick="closePopup()"></div>
@@ -146,6 +167,12 @@
     </div>
 
     <script>
+        // Geolocation variables
+        var userLocationMarker = null;
+        var userLocationCircle = null;
+        var watchId = null;
+        var isTracking = false;
+        var isGeolocationActive = false;
 
         // Initialize map
         var map = L.map('map', {
@@ -169,6 +196,9 @@
             }),
             terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
                 attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+            }),
+            traffic: L.tileLayer('https://mt1.google.com/vt/lyrs=m@221097413,traffic&hl=en&x={x}&y={y}&z={z}&s=Galil', {
+                attribution: '&copy; Google Maps Traffic'
             })
         };
 
@@ -179,7 +209,7 @@
         // Administrative layers
         var adminLayers = {};
 
-        // Create Desa layer
+         // Create Desa layer
         adminLayers.desa = L.geoJSON(DESA, {
             style: function(feature) {
                 return {
@@ -319,8 +349,443 @@
                 );
             }
         });
+// Tambahkan variabel global untuk menyimpan layer yang sedang terpilih
+var selectedLayer = null;
+var originalStyle = null;
 
-        // Functions
+// Fungsi untuk highlight layer yang dipilih
+function highlightFeature(layer) {
+    // Reset layer sebelumnya jika ada
+    if (selectedLayer) {
+        resetHighlight();
+    }
+    
+    // Simpan style asli dengan lebih lengkap
+    originalStyle = {
+        color: layer.options.color,
+        weight: layer.options.weight,
+        opacity: layer.options.opacity,
+        fillOpacity: layer.options.fillOpacity,
+        fillColor: layer.options.fillColor,
+        dashArray: layer.options.dashArray
+    };
+    selectedLayer = layer;
+    
+    // Terapkan style highlight
+    var highlightStyle = {
+        weight: (layer.options.weight || 2) + 2,
+        color: '#ffff00', // Kuning untuk highlight
+        fillOpacity: Math.min((layer.options.fillOpacity || 0.2) + 0.3, 0.8),
+        fillColor: '#ffff00'
+    };
+    
+    layer.setStyle(highlightStyle);
+    layer.bringToFront();
+}
+
+// Fungsi untuk reset highlight
+function resetHighlight() {
+    if (selectedLayer && originalStyle) {
+        // Kembalikan ke style asli
+        var resetStyle = {};
+        
+        // Copy semua properti yang ada di originalStyle
+        Object.keys(originalStyle).forEach(function(key) {
+            if (originalStyle[key] !== undefined) {
+                resetStyle[key] = originalStyle[key];
+            }
+        });
+        
+        selectedLayer.setStyle(resetStyle);
+        selectedLayer = null;
+        originalStyle = null;
+    }
+}
+
+// Modifikasi fungsi onEachFeature untuk semua layer
+// Tambahkan event listener click untuk setiap feature
+
+// Update Desa layer
+adminLayers.desa = L.geoJSON(DESA, {
+    style: function(feature) {
+        return {
+            color: "white",
+            weight: 3,
+            opacity: 0.8,
+            fillOpacity: 0.1
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Desa</div>' +
+            '<strong>Desa:</strong> ' + feature.properties.DESA + '<br>' +
+            '<strong>Kecamatan:</strong> ' + (feature.properties.KECAMATAN || 'Somagede') + '<br>' +
+            '<strong>Kabupaten:</strong> ' + (feature.properties.KABUPATEN || 'Banyumas') + '<br>' +
+            '<strong>Provinsi:</strong> ' + (feature.properties.PROVINSI || 'Jawa Tengah')
+        );
+        
+        // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+}).addTo(map);
+
+// Update Dusun layer
+adminLayers.dusun = L.geoJSON(DUSUN, {
+    style: function(feature) {
+        var dashPatterns = {
+            '1': '5, 5',
+            '2': '10, 5',
+            '3': '15, 10'
+        };
+        return {
+            color: '#2c3e50',
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.2,
+            dashArray: dashPatterns[feature.properties.Dusun] || '5, 5'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi Dusun</div>' +
+            '<strong>Dusun:</strong> ' + feature.properties.Dusun + '<br>' +
+            '<strong>Desa:</strong> ' + feature.properties.DESA
+        );
+        
+        // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+}).addTo(map);
+
+// Update RW layer
+adminLayers.rw = L.geoJSON(RW, {
+    style: function(feature) {
+        return {
+            color: "purple",
+            weight: 2,
+            opacity: 0.7,
+            fillOpacity: 0.15,
+            dashArray: '5, 5'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi RW</div>' +
+            '<strong>RW:</strong> ' + feature.properties.RW + '<br>' +
+            '<strong>Dusun:</strong> ' + (feature.properties.Dusun || '-') + '<br>' +
+            '<strong>Desa:</strong> ' + feature.properties.DESA
+        );
+        
+        // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+});
+
+// Update RT layer
+adminLayers.rt = L.geoJSON(RT, {
+    style: function(feature) {
+        return {
+            color: "red",
+            weight: 1.5,
+            opacity: 0.6,
+            fillOpacity: 0.1,
+            dashArray: '3, 3'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;">Informasi RT</div>' +
+            '<strong>RT:</strong> ' + feature.properties.RT + '<br>' +
+            '<strong>RW:</strong> ' + (feature.properties.RW || '-') + '<br>' +
+            '<strong>Desa:</strong> ' + feature.properties.DESA
+        );
+        
+        // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+});
+
+// Update Jalan layer
+adminLayers.jalan = L.geoJSON(typeof JALAN !== 'undefined' ? JALAN : null, {
+    style: function(feature) {
+        return {
+            color: "#F7931E",
+            weight: 2.5,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        var nama = feature.properties.NAMA_JALAN || feature.properties.NAME || 'Jalan';
+        var tipe = feature.properties.TIPE_JALAN || feature.properties.TYPE || 'Tidak diketahui';
+        var panjang = feature.properties.PANJANG || 'Tidak diketahui';
+        
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;"><i class="fas fa-road"></i> Informasi Jalan</div>' +
+            '<strong>Nama:</strong> ' + nama + '<br>' +
+            '<strong>Tipe:</strong> ' + tipe + '<br>' +
+            '<strong>Panjang:</strong> ' + panjang + ' m<br>' +
+            '<strong>Kondisi:</strong> ' + (feature.properties.KONDISI || 'Baik')
+        );
+        
+        // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+});
+
+// Update Sungai layer
+adminLayers.sungai = L.geoJSON(typeof SUNGAI !== 'undefined' ? SUNGAI : null, {
+    style: function(feature) {
+        return {
+            color: "blue",
+            weight: 3,
+            opacity: 1,
+            fillOpacity: 0.5,
+            lineCap: 'round',
+            lineJoin: 'round'
+        };
+    },
+    onEachFeature: function (feature, layer) {
+        var nama = feature.properties.NAMA_SUNGAI || feature.properties.NAME || 'Sungai Serayu';
+        var tipe = feature.properties.TIPE_SUNGAI || feature.properties.TYPE || 'Tidak diketahui';
+        var panjang = feature.properties.PANJANG || '181 KM';
+        
+        layer.bindPopup(
+            '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;"><i class="fas fa-water"></i> Informasi Sungai</div>' +
+            '<strong>Nama:</strong> ' + nama + '<br>' +
+            '<strong>Tipe:</strong> ' + tipe + '<br>' +
+            '<strong>Panjang:</strong> ' + panjang + ' m<br>' +
+            '<strong>Kedalaman:</strong> ' + (feature.properties.KEDALAMAN || 'Tidak diketahui') + ' m'
+        );
+                  // Tambahkan event click untuk highlight
+        layer.on('click', function() {
+            highlightFeature(layer);
+        });
+    }
+});
+
+// Tambahkan event listener untuk reset highlight ketika klik di area kosong
+map.on('click', function(e) {
+    // Cek apakah klik di area kosong (bukan pada layer)
+    var clickedOnFeature = false;
+    
+    // Cek semua layer yang aktif
+    Object.keys(adminLayers).forEach(function(layerKey) {
+        var layer = adminLayers[layerKey];
+        if (layer && map.hasLayer(layer)) {
+            layer.eachLayer(function(feature) {
+                if (feature.getBounds && feature.getBounds().contains(e.latlng)) {
+                    clickedOnFeature = true;
+                }
+            });
+        }
+    });
+    
+    // Reset highlight jika klik di area kosong
+    if (!clickedOnFeature) {
+        resetHighlight();
+    }
+});
+
+// Tambahkan tombol untuk clear selection di control buttons
+function clearSelection() {
+    resetHighlight();
+}
+
+console.log('Fitur highlighting objek terpilih berhasil ditambahkan!');      
+
+
+        // Geolocation Functions
+        function toggleGeolocation() {
+            if (!isGeolocationActive) {
+                startGeolocation();
+            } else {
+                stopGeolocation();
+            }
+        }
+
+        function startGeolocation() {
+            if (!navigator.geolocation) {
+                alert('Geolocation tidak didukung oleh browser Anda');
+                return;
+            }
+
+            var btn = document.getElementById('geolocate-btn');
+            btn.classList.add('active');
+            isGeolocationActive = true;
+
+            // Get current position
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    var accuracy = position.coords.accuracy;
+
+                    updateUserLocation(lat, lon, accuracy);
+                    
+                    // Center map on user location
+                    map.setView([lat, lon], 16);
+                },
+                function(error) {
+                    handleGeolocationError(error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        function stopGeolocation() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+
+            if (userLocationMarker) {
+                map.removeLayer(userLocationMarker);
+                userLocationMarker = null;
+            }
+
+            if (userLocationCircle) {
+                map.removeLayer(userLocationCircle);
+                userLocationCircle = null;
+            }
+
+            var btn = document.getElementById('geolocate-btn');
+            btn.classList.remove('active');
+            isGeolocationActive = false;
+            isTracking = false;
+            
+            // Update toggle
+            document.getElementById('tracking-toggle').checked = false;
+        }
+
+        function toggleLocationTracking() {
+            var isChecked = document.getElementById('tracking-toggle').checked;
+            
+            if (isChecked && !isTracking) {
+                startLocationTracking();
+            } else if (!isChecked && isTracking) {
+                stopLocationTracking();
+            }
+        }
+
+        function startLocationTracking() {
+            if (!navigator.geolocation) {
+                alert('Geolocation tidak didukung oleh browser Anda');
+                document.getElementById('tracking-toggle').checked = false;
+                return;
+            }
+
+            isTracking = true;
+            
+            if (!isGeolocationActive) {
+                startGeolocation();
+            }
+
+            // Start watching position
+            watchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    var accuracy = position.coords.accuracy;
+
+                    updateUserLocation(lat, lon, accuracy);
+                    
+                    // Follow user movement
+                    map.panTo([lat, lon]);
+                },
+                function(error) {
+                    handleGeolocationError(error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 30000
+                }
+            );
+        }
+
+        function stopLocationTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            isTracking = false;
+        }
+
+        function updateUserLocation(lat, lon, accuracy) {
+            // Remove existing markers
+            if (userLocationMarker) {
+                map.removeLayer(userLocationMarker);
+            }
+            if (userLocationCircle) {
+                map.removeLayer(userLocationCircle);
+            }
+
+            // Create accuracy circle
+            userLocationCircle = L.circle([lat, lon], {
+                color: '#4CAF50',
+                fillColor: '#4CAF50',
+                fillOpacity: 0.2,
+                radius: accuracy,
+                weight: 1
+            }).addTo(map);
+
+            // Create location marker
+            var userIcon = L.divIcon({
+                className: 'user-location-marker',
+                html: '<div style="width: 100%; height: 100%; background: #4CAF50; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            userLocationMarker = L.marker([lat, lon], { icon: userIcon })
+                .addTo(map)
+                .bindPopup(
+                    '<div style="font-weight: bold; color: #2c3e50; margin-bottom: 10px;"><i class="fas fa-location-arrow"></i> Lokasi Anda</div>' +
+                    '<strong>Latitude:</strong> ' + lat.toFixed(6) + '<br>' +
+                    '<strong>Longitude:</strong> ' + lon.toFixed(6) + '<br>' +
+                    '<strong>Akurasi:</strong> ±' + Math.round(accuracy) + ' meter<br>' +
+                    '<strong>Waktu:</strong> ' + new Date().toLocaleTimeString()
+                );
+        }
+
+        function handleGeolocationError(error) {
+            var message = '';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = "Izin akses lokasi ditolak. Silakan aktifkan izin lokasi di browser Anda.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = "Informasi lokasi tidak tersedia.";
+                    break;
+                case error.TIMEOUT:
+                    message = "Permintaan lokasi timeout.";
+                    break;
+                default:
+                    message = "Terjadi error yang tidak diketahui.";
+                    break;
+            }
+            
+            alert('Error Geolocation: ' + message);
+            stopGeolocation();
+        }
+
+        // Original Functions (unchanged)
         function toggleMenu() {
             var menu = document.getElementById('menu-container');
             menu.classList.toggle('active');
@@ -397,6 +862,7 @@
             showPopup('Tentang Peta', 
                 'Peta Batas Administrasi Desa Somagede adalah aplikasi web interaktif yang menampilkan informasi batas administratif mulai dari tingkat desa, dusun, RW, hingga RT. ' +
                 'Peta ini juga dilengkapi dengan informasi infrastruktur seperti jaringan jalan dan sungai yang ada di wilayah desa. ' +
+                'Fitur baru termasuk Google Traffic layer untuk melihat kondisi lalu lintas real-time dan geolocation untuk mengetahui posisi Anda saat ini. ' +
                 'Peta ini dapat digunakan untuk perencanaan pembangunan, navigasi, dan analisis spasial wilayah.'
             );
         }
@@ -405,7 +871,8 @@
             showPopup('Informasi Desa Somagede', 
                 'Desa Somagede terletak di Kecamatan Somagede, Kabupaten Banyumas, Provinsi Jawa Tengah. ' +
                 'Desa ini terdiri dari beberapa dusun dengan pembagian RW dan RT yang dapat dilihat melalui layer-layer yang tersedia di menu. ' +
-                'Infrastruktur desa meliputi jaringan jalan dan sistem hidrologi (sungai) yang mendukung aktivitas masyarakat.'
+                'Infrastruktur desa meliputi jaringan jalan dan sistem hidrologi (sungai) yang mendukung aktivitas masyarakat. ' +
+                'Dengan fitur geolocation, Anda dapat mengetahui posisi Anda relatif terhadap batas-batas administrasi desa.'
             );
         }
 
@@ -413,9 +880,11 @@
             showPopup('Bantuan Penggunaan', 
                 'Cara menggunakan peta:<br>' +
                 '• Gunakan menu di kiri untuk mengontrol layer yang ditampilkan<br>' +
-                '• Pilih peta dasar sesuai kebutuhan (OSM, Satelit, atau Terrain)<br>' +
+                '• Pilih peta dasar sesuai kebutuhan (OSM, Satelit, Terrain, atau Google Traffic)<br>' +
                 '• Aktifkan/nonaktifkan layer batas administrasi<br>' +
                 '• Aktifkan layer infrastruktur (jalan dan sungai) untuk informasi lebih detail<br>' +
+                '• Gunakan tombol lokasi (GPS) untuk mengetahui posisi Anda saat ini<br>' +
+                '• Aktifkan "Tracking Lokasi" untuk mengikuti pergerakan Anda secara real-time<br>' +
                 '• Gunakan fitur pencarian untuk mencari lokasi, jalan, atau sungai tertentu<br>' +
                 '• Klik pada area peta untuk melihat informasi detail<br>' +
                 '• Gunakan tombol reset untuk kembali ke tampilan awal'
@@ -458,7 +927,15 @@
             }
         }, 500);
 
-        console.log('Peta Desa Somagede dengan layer jalan dan sungai berhasil dimuat!');
+        // Handle page unload to stop geolocation
+        window.addEventListener('beforeunload', function() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        });
+
+        console.log('Peta Desa Somagede dengan Google Traffic dan Geolocation berhasil dimuat!');
+
     </script>
 </body>
 </html>
